@@ -1,0 +1,30 @@
+{
+  "top": [
+    {
+      "id": "1769533833936",
+      "title": " ",
+      "sub": "",
+      "imageUrl": "http://192.168.11.8:3000/uploads/promos/promo_1769533832768.mp4",
+      "linkType": "none",
+      "category": null
+    },
+    {
+      "id": "1769533695474",
+      "title": " ",
+      "sub": "",
+      "imageUrl": "http://192.168.11.8:3000/uploads/promos/promo_1769533694301.JPG",
+      "linkType": "none",
+      "category": null
+    }
+  ],
+  "bottom": [
+    {
+      "id": "1769532918090",
+      "title": " ",
+      "sub": "",
+      "imageUrl": "http://192.168.11.8:3000/uploads/promos/promo_1769532916676.JPG",
+      "linkType": "none",
+      "category": null
+    }
+  ]
+}

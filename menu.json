@@ -1,0 +1,136 @@
+{
+  "version": 2,
+  "updatedAt": "2026-01-22T17:06:17.805Z",
+  "items": [
+    {
+      "productId": "p_22",
+      "name": "鏡月",
+      "variantLabel": "鏡月グリーン",
+      "type": "normal",
+      "price": 5000,
+      "category": "焼酎",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_17",
+      "name": "鏡月",
+      "variantLabel": "鏡月プレミアム（20度）",
+      "type": "normal",
+      "price": 6000,
+      "category": "焼酎",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_3",
+      "name": "鏡月",
+      "variantLabel": "アセロラ鏡月",
+      "type": "normal",
+      "price": 5000,
+      "category": "焼酎",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_5",
+      "name": "キンミヤ",
+      "variantLabel": "20度　720ml",
+      "type": "normal",
+      "price": 5000,
+      "category": "焼酎",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_12",
+      "name": "モエ・エ・シャンドン",
+      "variantLabel": "ブリュット　アンぺリアル",
+      "type": "normal",
+      "price": 25000,
+      "category": "シャンパン",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_6",
+      "name": "芋焼酎",
+      "variantLabel": "芋焼酎",
+      "type": "normal",
+      "price": 0,
+      "category": "芋焼酎",
+      "printTarget": "none",
+      "isActive": true
+    },
+    {
+      "productId": "p_10",
+      "name": "知心剣",
+      "variantLabel": "知心剣",
+      "type": "normal",
+      "price": 6000,
+      "category": "麦焼酎",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_14",
+      "name": "吉四六",
+      "variantLabel": "瓶",
+      "type": "normal",
+      "price": 12000,
+      "category": "麦焼酎",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_15",
+      "name": "吉四六",
+      "variantLabel": "陶器",
+      "type": "normal",
+      "price": 16000,
+      "category": "麦焼酎",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_19",
+      "name": "チャミスル",
+      "variantLabel": "チャミスル　白（20度）",
+      "type": "normal",
+      "price": 5000,
+      "category": "焼酎",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_20",
+      "name": "茉莉花",
+      "variantLabel": "茉莉花",
+      "type": "normal",
+      "price": 6000,
+      "category": "焼酎",
+      "printTarget": "register",
+      "isActive": true
+    },
+    {
+      "productId": "p_23",
+      "name": "ピッチャー",
+      "variantLabel": "ピッチャー",
+      "type": "normal",
+      "price": 0,
+      "category": "ピッチャー",
+      "printTarget": "none",
+      "isActive": true
+    },
+    {
+      "productId": "p_24",
+      "name": "ヴーヴクリコ",
+      "variantLabel": "ヴーヴクリコ",
+      "type": "normal",
+      "price": 25000,
+      "category": "シャンパン",
+      "printTarget": "register",
+      "isActive": true
+    }
+  ]
+}
