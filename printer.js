@@ -5,7 +5,6 @@ const net = require("net");
 const path = require("path");
 const iconv = require("iconv-lite");
 
-// --- Windows用（今回は未使用） ---
 const PRINTER_MAP = {
   drink:    "Brother DCP-J528N Printer",
   food:     "Brother DCP-J528N Printer",
@@ -18,16 +17,12 @@ function normalizePrintableText(text) {
   return String(text ?? "")
     .replace(/[─━]/g, "-")
     .replace(/[（]/g, "(")
-    .replace(/[）]/g, ")");
+    .replace(/[）]/g, ")")
+    .replace(/\u3000/g, "  ");
 }
 
-function encodePrintableText(text) {
-  const normalized = normalizePrintableText(text);
-  const encoding = (process.env.PRINTER_ENCODING || "cp932").toLowerCase();
-  if (encoding === "utf8" || encoding === "utf-8") {
-    return Buffer.from(normalized, "utf8");
-  }
-  return iconv.encode(normalized, encoding);
+function toCP932(text) {
+  return iconv.encode(normalizePrintableText(text), "cp932");
 }
 
 function resolveCodePageByte() {
@@ -41,100 +36,126 @@ function resolveCodePageByte() {
 }
 
 function shouldSendCodePageCommand() {
-  const raw = (process.env.PRINTER_SEND_CODEPAGE || "true").toLowerCase();
+  const raw = (process.env.PRINTER_SEND_CODEPAGE || "false").toLowerCase();
   return raw !== "0" && raw !== "false";
 }
 
-// ESC/POS コマンド定数（バイト列）
 const CMD = {
   init:        Buffer.from([0x1b, 0x40]),
-  alignLeft:   Buffer.from([0x1b, 0x61, 0x00]),
-  alignCenter: Buffer.from([0x1b, 0x61, 0x01]),
-  alignRight:  Buffer.from([0x1b, 0x61, 0x02]),
-  emphasisOn:  Buffer.from([0x1b, 0x45, 0x01]),
-  emphasisOff: Buffer.from([0x1b, 0x45, 0x00]),
-  dblSizeOn:   Buffer.from([0x1d, 0x21, 0x11]),  // 縦横2倍
-  normalSize:  Buffer.from([0x1d, 0x21, 0x00]),  // 通常サイズ
+  emphasisOn:  Buffer.from([0x1b, 0x45]),
+  emphasisOff: Buffer.from([0x1b, 0x46]),
+  feed:        Buffer.from([0x1b, 0x64, 0x03]),
+  cut:         Buffer.from([0x1b, 0x0c]),
 };
 
-/**
- * domain.js の buildReceiptText が返すセグメント配列を
- * ESC/POS Buffer に変換する。
- * テキストは encodePrintableText (cp932) を通すだけ。
- * コマンドは Buffer 定数を直接 push するため文字化けしない。
- */
+function buildLine(leftBuf, rightBuf, totalBytes) {
+  const padBytes = totalBytes - leftBuf.length - rightBuf.length;
+  const pad = Buffer.alloc(Math.max(0, padBytes), 0x20);
+  return Buffer.concat([leftBuf, pad, rightBuf, Buffer.from([0x0a])]);
+}
+
+// ¥を0x5Cで送る（CP932/StarPRNT共通の円記号）
+function formatAmountBuf(yenStr) {
+  const num = yenStr.startsWith("¥") ? yenStr.slice(1) : yenStr;
+  const padded = num.padStart(7);
+  return Buffer.concat([
+    Buffer.from([0x5C]),           // CP932/StarPRNT で ¥
+    Buffer.from(padded, "ascii"),  // 数字はASCIIそのまま
+  ]);
+}
+
+function centerLine(text, totalBytes) {
+  const buf = toCP932(text);
+  const pad = Math.max(0, Math.floor((totalBytes - buf.length) / 2));
+  return Buffer.concat([
+    Buffer.alloc(pad, 0x20),
+    buf,
+    Buffer.from([0x0a]),
+  ]);
+}
+
 function buildRawPrintData(segments) {
   const chunks = [];
-
   chunks.push(CMD.init);
 
   if (shouldSendCodePageCommand()) {
     chunks.push(Buffer.from([0x1b, 0x74, resolveCodePageByte()]));
   }
 
+  const ROW_BYTES    = 42;
+  const MARGIN       = 1;
+  const AMOUNT_BYTES = 8;
+  const QTY_BYTES    = 3;
+  const SEP          = 1;
+
+  const ITEM_RIGHT  = QTY_BYTES + SEP + AMOUNT_BYTES + MARGIN; // 13
+  const LABEL_RIGHT = AMOUNT_BYTES + MARGIN;                    // 9
+
   for (const seg of segments) {
+
     if (seg.type === "title") {
-      // 中央寄せのみ
-      chunks.push(CMD.alignCenter);
-      chunks.push(encodePrintableText(seg.text + "\n"));
-      chunks.push(CMD.alignLeft);
+      chunks.push(centerLine(seg.text, ROW_BYTES));
+
+    } else if (seg.type === "item") {
+      const qtyStr = seg.qty.padStart(QTY_BYTES);
+      const rightBuf = Buffer.concat([
+        Buffer.from(qtyStr),
+        Buffer.from(" "),
+        formatAmountBuf(seg.price),
+        Buffer.alloc(MARGIN, 0x20),
+      ]);
+      const nameBuf = toCP932(seg.name);
+      chunks.push(buildLine(nameBuf, rightBuf, ROW_BYTES));
+
+      for (const extra of seg.nameExtra || []) {
+        chunks.push(Buffer.concat([toCP932(extra), Buffer.from([0x0a])]));
+      }
+
+    } else if (seg.type === "labelright") {
+      const rightBuf = Buffer.concat([
+        formatAmountBuf(seg.amount),
+        Buffer.alloc(MARGIN, 0x20),
+      ]);
+      const labelBuf = toCP932(seg.label);
+      chunks.push(buildLine(labelBuf, rightBuf, ROW_BYTES));
 
     } else if (seg.type === "total") {
-      // 強調・1行に「合計」ラベルと金額を並べる
       chunks.push(CMD.emphasisOn);
-      const line = padEnd(seg.label, seg.labelWidth) +
-                   padStart(seg.amount, seg.priceWidth) + "\n";
-      chunks.push(encodePrintableText(line));
+      const rightBuf = Buffer.concat([
+        formatAmountBuf(seg.amount),
+        Buffer.alloc(MARGIN, 0x20),
+      ]);
+      const labelBuf = toCP932("合計");
+      chunks.push(buildLine(labelBuf, rightBuf, ROW_BYTES));
       chunks.push(CMD.emphasisOff);
 
     } else if (seg.type === "footer") {
-      // 中央寄せ
-      chunks.push(CMD.alignCenter);
-      chunks.push(encodePrintableText(seg.text + "\n"));
-      chunks.push(CMD.alignLeft);
+      chunks.push(centerLine(seg.text, ROW_BYTES));
 
     } else {
-      // 通常テキスト
-      chunks.push(encodePrintableText(seg.text));
+      chunks.push(Buffer.concat([toCP932(seg.text)]));
     }
   }
 
-  // 余白 + 紙送り + カット
-  chunks.push(encodePrintableText("\n\n\n\n"));
-  chunks.push(Buffer.from([0x1b, 0x64, 0x30]));
-  chunks.push(Buffer.from([0x1d, 0x56, 0x01]));
+  chunks.push(Buffer.from([0x0a, 0x0a, 0x0a]));
+  chunks.push(CMD.feed);
+  chunks.push(CMD.cut);
 
   return Buffer.concat(chunks);
 }
 
-// padEnd / padStart （printer.js 内で total 行組立に必要）
-function isWideChar(c) {
-  const code = c.charCodeAt(0);
-  return (code >= 0x3000 && code <= 0x9fff) || (code >= 0xff00 && code <= 0xffef);
-}
-function displayWidth(str) {
-  let w = 0;
-  for (const c of String(str ?? "")) w += isWideChar(c) ? 2 : 1;
-  return w;
-}
-function padEnd(text, width) {
-  text = String(text ?? "");
-  const w = displayWidth(text);
-  return w >= width ? text : text + " ".repeat(width - w);
-}
-function padStart(text, width) {
-  text = String(text ?? "");
-  const w = displayWidth(text);
-  return w >= width ? text : " ".repeat(width - w) + text;
+function encodePrintableText(text) {
+  return toCP932(text);
 }
 
-// --- Raw TCP設定 ---
+function normalizePrintableTextExport(text) {
+  return normalizePrintableText(text);
+}
+
 function resolveRawTcpConfig(target) {
   const key = String(target || "receipt").toUpperCase();
-  const host =
-    process.env[`PRINTER_${key}_HOST`] || process.env.PRINTER_HOST;
-  const portRaw =
-    process.env[`PRINTER_${key}_PORT`] || process.env.PRINTER_PORT;
+  const host = process.env[`PRINTER_${key}_HOST`] || process.env.PRINTER_HOST;
+  const portRaw = process.env[`PRINTER_${key}_PORT`] || process.env.PRINTER_PORT;
   const port = Number(portRaw || 9100);
   if (!host) return null;
   if (!Number.isFinite(port) || port <= 0) {
@@ -143,11 +164,10 @@ function resolveRawTcpConfig(target) {
   return { host, port };
 }
 
-// --- Raw TCP印刷 ---
 function printTextRawTcp(segments, { host, port }) {
   return new Promise((resolve, reject) => {
-    const socket = new net.Socket();
-    socket.connect(port, host, () => {
+    const socket = require("net").createConnection(port, host);
+    socket.on("connect", () => {
       try {
         const data = buildRawPrintData(segments);
         socket.write(data, () => {
@@ -161,11 +181,9 @@ function printTextRawTcp(segments, { host, port }) {
   });
 }
 
-// --- 共通印刷関数 ---
 function printTextWindows(segments, target = "receipt") {
   return new Promise((resolve, reject) => {
     const transport = (process.env.PRINT_TRANSPORT || "rawtcp").toLowerCase();
-
     if (transport === "rawtcp") {
       const tcpConfig = resolveRawTcpConfig(target);
       if (!tcpConfig) {
@@ -176,20 +194,13 @@ function printTextWindows(segments, target = "receipt") {
       printTextRawTcp(segments, tcpConfig).then(resolve).catch(reject);
       return;
     }
-
-    // Windowsドライバ印刷（未使用）
     const printerName = PRINTER_MAP[target];
-    if (!printerName) {
-      return reject(new Error(`Unknown print target: ${target}`));
-    }
-    const text = segments.map(s => s.text || "").join("");
+    if (!printerName) return reject(new Error(`Unknown print target: ${target}`));
+    const text = segments.map(s => s.text || s.name || s.label || "").join("\n");
     const filePath = path.join(__dirname, `print_${target}_${Date.now()}.txt`);
     fs.writeFileSync(filePath, text, "utf8");
     const cmd = `powershell -NoProfile -Command "Get-Content '${filePath}' -Encoding UTF8 | Out-Printer -Name '${printerName}'"`;
-    exec(cmd, (err) => {
-      if (err) return reject(err);
-      resolve();
-    });
+    exec(cmd, (err) => { if (err) return reject(err); resolve(); });
   });
 }
 
@@ -200,5 +211,5 @@ module.exports = {
   PRINTER_MAP,
   buildRawPrintData,
   encodePrintableText,
-  normalizePrintableText,
+  normalizePrintableText: normalizePrintableTextExport,
 };
