@@ -172,6 +172,27 @@ class Store {
 
     return { table, orders, orderItems };
   }
+getTableItems(tableId) {
+    const orderIds = this.ordersByTable.get(tableId) || [];
+    const items = [];
+
+    for (const orderId of orderIds) {
+      const itemIds = this.orderItemsByOrder.get(orderId) || [];
+
+      for (const itemId of itemIds) {
+        const item = this.orderItems.get(itemId);
+        if (!item) continue;
+
+        items.push({
+          ...item,
+          quantity: Number(item.quantity ?? item.qty ?? 0),
+          qty: Number(item.qty ?? item.quantity ?? 0),
+        });
+      }
+    }
+
+    return items;
+  }
 
   // ---------- Checkout ----------
   calcCheckout(tableId) {
